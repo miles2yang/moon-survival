@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>月球倖存 + Generative AI 對話</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.14.0/Sortable.min.js"></script>
+</head>
+<body>
+  <div class="container">
+    <h1>🌙 月球倖存實驗 + Generative AI 對話</h1>
+    <p class="muted">左側拖放排序並評分；右側可與 AI 討論策略或詢問建議。</p>
+
+    <div class="two-col">
+      <!-- LEFT: Moon Survival Task -->
+      <div class="left-panel panel">
+        <h2>Moon Survival Task</h2>
+        <p class="muted">把物品從最重要拖到最不重要（最上面 = 最重要）。</p>
+        <ul id="items" class="item-list">
+          {% for it in items %}
+          <li class="item" data-name="{{ it.name }}">
+            <strong class="item-title">{{ it.name }}</strong>
+            <div class="item-desc">{{ it.description }}</div>
+          </li>
+          {% endfor %}
+        </ul>
+        <div class="controls">
+          <button id="evaluateBtn">評分</button>
+          <button id="resetBtn">回復預設</button>
+        </div>
+
+        <div id="taskResult" class="task-result"></div>
+      </div>
+
+      <!-- RIGHT: Generative AI Chat -->
+      <div class="right-panel panel chat-panel">
+        <h2>Generative AI 對話</h2>
+        <div id="chatWindow" class="chat-window">
+          <div id="messages" class="messages">
+            <div class="msg system">你可以詢問：例如「氧氣重要嗎？」或「如何在月球上保持水源？」</div>
+          </div>
+        </div>
+
+        <form id="chatForm" class="chat-form" onsubmit="return false;">
+          <input id="chatInput" type="text" placeholder="輸入訊息並按送出..." autocomplete="off" />
+          <button id="sendBtn" type="button">送出</button>
+        </form>
+
+        <div class="ai-hint">
+          {% if openai_enabled %}
+            <small>OpenAI 已啟用（後端會使用 OpenAI 回應）。</small>
+          {% else %}
+            <small>OpenAI 未設定：目前使用本地簡易回應。設定 OPENAI_API_KEY 可啟用真實 AI。</small>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <footer>
+      <small class="muted">在 Codespaces 啟動後轉發 5000 port，或本機瀏覽 <code>http://127.0.0.1:5000</code></small>
+    </footer>
+  </div>
+
+  <script>
+    // Sortable for task list
+    const el = document.getElementById('items');
+    Sortable.create(el, { animation: 150 });
+
+    function getOrder() {
+      return Array.from(document.querySelectorAll('#items .item'))
+        .map(li => li.dataset.name);
+    }
+
+    function showTaskResult(json) {
+      const div = document.getElementById('taskResult');
+      div.innerHTML = `<p><strong>分數：</strong> ${json.score}（越低越好）</p>`;
+
+      let html = '<table class="result-table"><thead><tr><th>#</th><th>物品</th><th>你的順位</th><th>官方順位</th><th>差距</th></tr></thead><tbody>';
+      json.per_item.forEach((row, idx) => {
+        const diff = row.diff === null ? '-' : row.diff;
+        html += `<tr>
+          <td>${idx + 1}</td>
+          <td>${row.name}</td>
+          <td>${row.submitted_rank}</td>
+          <td>${row.official_rank ?? '-'};</td>
+          <td>${diff}</td>
+        </tr>`;
+      });
+      html += '</tbody></table>';
+      div.innerHTML += html;
+      div.scrollIntoView({ behavior: 'smooth' });
+    }
+
+    document.getElementById('evaluateBtn').addEventListener('click', async () => {
+      const order = getOrder();
+      const resp = await fetch('/evaluate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order })
+      });
+      if (!resp.ok) {
+        alert('評分失敗，請重試');
+        return;
+      }
+      const json = await resp.json();
+      showTaskResult(json);
+    });
+
+    document.getElementById('resetBtn').addEventListener('click', () => {
+      location.reload();
+    });
+
+    // Chat UI logic
+    const messagesEl = document.getElementById('messages');
+    function appendMessage(role, text) {
+      const div = document.createElement('div');
+      div.className = 'msg ' + role;
+      div.textContent = text;
+      messagesEl.appendChild(div);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    async function sendChat(message) {
+      appendMessage('user', message);
+      appendMessage('thinking', 'AI 回應中…');
+
+      try {
+        const resp = await fetch('/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message })
+        });
+        const data = await resp.json();
+        // remove the "thinking" bubble
+        const thinking = document.querySelector('.msg.thinking');
+        if (thinking) thinking.remove();
+
+        if (resp.ok && data.reply) {
+          appendMessage('assistant', data.reply);
+        } else {
+          appendMessage('assistant', '回應失敗，請稍後再試。');
+        }
+      } catch (err) {
+        const thinking = document.querySelector('.msg.thinking');
+        if (thinking) thinking.remove();
+        appendMessage('assistant', '通訊錯誤：' + err.message);
+      }
+    }
+
+    document.getElementById('sendBtn').addEventListener('click', () => {
+      const input = document.getElementById('chatInput');
+      const text = input.value.trim();
+      if (!text) return;
+      input.value = '';
+      sendChat(text);
+    });
+
+    // Enter to send
+    document.getElementById('chatInput').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        document.getElementById('sendBtn').click();
+      }
+    });
+  </script>
+</body>
+</html>
