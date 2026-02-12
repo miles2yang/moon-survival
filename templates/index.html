@@ -3,39 +3,83 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>月球倖存 + Generative AI 對話</title>
+  <title>月球倖存 + 多 Agent 對話（美化版）</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.14.0/Sortable.min.js"></script>
 </head>
 <body>
-  <div class="container">
-    <h1>🌙 月球倖存實驗 + Generative AI 對話</h1>
-    <p class="muted">左側拖放排序並評分；右側可與 AI 討論策略或詢問建議。</p>
+  <div class="wrap">
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo">🌙</div>
+        <div>
+          <h1>Moon Survival Lab</h1>
+          <div class="subtitle">拖放排序 • 多 Agent 對話 • 即時評分</div>
+        </div>
+      </div>
+      <nav class="top-actions">
+        <button id="resetBtnTop" class="btn ghost">回復預設</button>
+      </nav>
+    </header>
 
-    <div class="two-col">
-      <!-- LEFT: Moon Survival Task -->
-      <div class="left-panel panel">
-        <h2>Moon Survival Task</h2>
-        <p class="muted">把物品從最重要拖到最不重要（最上面 = 最重要）。</p>
-        <ul id="items" class="item-list">
-          {% for it in items %}
-          <li class="item" data-name="{{ it.name }}">
-            <strong class="item-title">{{ it.name }}</strong>
-            <div class="item-desc">{{ it.description }}</div>
-          </li>
-          {% endfor %}
-        </ul>
-        <div class="controls">
-          <button id="evaluateBtn">評分</button>
-          <button id="resetBtn">回復預設</button>
+    <main class="container">
+      <section class="panel left">
+        <div class="panel-head">
+          <h2>任務：Moon Survival</h2>
+          <p class="muted">把物品從最重要拖到最不重要（最上面 = 最重要）。可使用拖拉手把或整行拖曳。</p>
         </div>
 
-        <div id="taskResult" class="task-result"></div>
-      </div>
+        <div class="task-card">
+          <ul id="items" class="item-list">
+            {% for it in items %}
+            <li class="item" data-name="{{ it.name }}">
+              <div class="item-left">
+                <div class="item-icon" aria-hidden>🔘</div>
+                <div class="item-body">
+                  <div class="item-title">{{ it.name }}</div>
+                  <div class="item-desc">{{ it.description }}</div>
+                </div>
+              </div>
+              <div class="item-right">
+                <span class="drag-handle" title="拖曳移動">⋮⋮</span>
+              </div>
+            </li>
+            {% endfor %}
+          </ul>
 
-      <!-- RIGHT: Generative AI Chat -->
-      <div class="right-panel panel chat-panel">
-        <h2>Generative AI 對話</h2>
+          <div class="controls">
+            <button id="evaluateBtn" class="btn primary">評分</button>
+            <button id="clearResult" class="btn ghost">清除結果</button>
+          </div>
+
+          <div id="taskResult" class="task-result card-shadow"></div>
+        </div>
+      </section>
+
+      <aside class="panel right">
+        <div class="panel-head">
+          <h2>Generative AI 聊天（多 Agent）</h2>
+          <p class="muted">可設定每個 agent 的 profile，並同時向多個 agents 發問以比較建議。</p>
+        </div>
+
+        <div class="chat-controls">
+          <label class="muted">同時啟用 agents：</label>
+          <select id="agentsSelect" class="select-inline">
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3" selected>3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+          </select>
+          <label class="muted"><input id="useMemory" type="checkbox" checked /> 保留記憶</label>
+        </div>
+
+        <div id="profilesEditor" class="profiles-editor"></div>
+        <div class="profile-actions" style="margin-bottom:12px;">
+          <button id="applyProfilesBtn" class="btn">套用 Profiles</button>
+          <button id="resetProfilesBtn" class="btn ghost">還原預設</button>
+        </div>
+
         <div id="chatWindow" class="chat-window">
           <div id="messages" class="messages">
             <div class="msg system">你可以詢問：例如「氧氣重要嗎？」或「如何在月球上保持水源？」</div>
@@ -43,53 +87,82 @@
         </div>
 
         <form id="chatForm" class="chat-form" onsubmit="return false;">
-          <input id="chatInput" type="text" placeholder="輸入訊息並按送出..." autocomplete="off" />
-          <button id="sendBtn" type="button">送出</button>
+          <input id="chatInput" class="chat-input" type="text" placeholder="輸入訊息並按送出..." autocomplete="off" />
+          <button id="sendBtn" class="btn primary" type="button">送出</button>
         </form>
 
-        <div class="ai-hint">
+        <div class="ai-hint muted">
           {% if openai_enabled %}
-            <small>OpenAI 已啟用（後端會使用 OpenAI 回應）。</small>
+            OpenAI 已啟用（後端會使用 OpenAI 回應）。
           {% else %}
-            <small>OpenAI 未設定：目前使用本地簡易回應。設定 OPENAI_API_KEY 可啟用真實 AI。</small>
+            OpenAI 未設定：使用本地簡易回應做為 fallback。
           {% endif %}
         </div>
-      </div>
-    </div>
+      </aside>
+    </main>
 
-    <footer>
-      <small class="muted">在 Codespaces 啟動後轉發 5000 port，或本機瀏覽 <code>http://127.0.0.1:5000</code></small>
-    </footer>
+    <footer class="footer muted">提示：在 Codespaces 啟動後轉發 5000 port，或本機瀏覽 <code>http://127.0.0.1:5000</code></footer>
   </div>
 
   <script>
-    // Sortable for task list
-    const el = document.getElementById('items');
-    Sortable.create(el, { animation: 150 });
+    // Icon mapping (name -> emoji). 可自訂或擴充
+    const ICON_MAP = {
+      "氧氣瓶": "🫧",
+      "水": "💧",
+      "星圖": "🗺️",
+      "食物濃縮物": "🍫",
+      "太陽能電池板": "🔋",
+      "衣服補丁": "🧵",
+      "醫療箱": "🩺",
+      "繩索": "🪢",
+      "降落傘": "🪂",
+      "救生筏": "🛶",
+      "信號鏡": "🔦",
+      "手電筒": "🔦",
+      "火柴": "🧯",
+      "月球地圖": "🛰️",
+      "磁羅盤": "🧭"
+    };
 
+    // Initialize icons in the list
+    document.addEventListener('DOMContentLoaded', () => {
+      document.querySelectorAll('#items .item').forEach(li => {
+        const name = li.dataset.name;
+        const iconEl = li.querySelector('.item-icon');
+        if (ICON_MAP[name]) iconEl.textContent = ICON_MAP[name];
+      });
+
+      // Make list sortable
+      Sortable.create(document.getElementById('items'), {
+        animation: 180,
+        handle: '.drag-handle',
+        ghostClass: 'ghost',
+      });
+    });
+
+    // Rest of chat & task code (keeps previously used logic)
+    // --- Task evaluation & reset ---
     function getOrder() {
-      return Array.from(document.querySelectorAll('#items .item'))
-        .map(li => li.dataset.name);
+      return Array.from(document.querySelectorAll('#items .item')).map(li => li.dataset.name);
     }
 
-    function showTaskResult(json) {
-      const div = document.getElementById('taskResult');
-      div.innerHTML = `<p><strong>分數：</strong> ${json.score}（越低越好）</p>`;
-
-      let html = '<table class="result-table"><thead><tr><th>#</th><th>物品</th><th>你的順位</th><th>官方順位</th><th>差距</th></tr></thead><tbody>';
+    function renderTaskResult(json) {
+      const container = document.getElementById('taskResult');
+      container.innerHTML = `<div class="result-header"><strong>分數：</strong> ${json.score}（越低越好）</div>`;
+      let html = '<div class="result-body"><table class="result-table"><thead><tr><th>#</th><th>物品</th><th>你的順位</th><th>官方順位</th><th>差距</th></tr></thead><tbody>';
       json.per_item.forEach((row, idx) => {
         const diff = row.diff === null ? '-' : row.diff;
         html += `<tr>
           <td>${idx + 1}</td>
           <td>${row.name}</td>
           <td>${row.submitted_rank}</td>
-          <td>${row.official_rank ?? '-'};</td>
+          <td>${row.official_rank ?? '-'}</td>
           <td>${diff}</td>
         </tr>`;
       });
-      html += '</tbody></table>';
-      div.innerHTML += html;
-      div.scrollIntoView({ behavior: 'smooth' });
+      html += '</tbody></table></div>';
+      container.innerHTML += html;
+      container.scrollIntoView({ behavior: 'smooth' });
     }
 
     document.getElementById('evaluateBtn').addEventListener('click', async () => {
@@ -99,70 +172,102 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ order })
       });
-      if (!resp.ok) {
-        alert('評分失敗，請重試');
-        return;
-      }
+      if (!resp.ok) { alert('評分失敗，請重試'); return; }
       const json = await resp.json();
-      showTaskResult(json);
+      renderTaskResult(json);
     });
 
-    document.getElementById('resetBtn').addEventListener('click', () => {
-      location.reload();
+    document.getElementById('clearResult').addEventListener('click', () => {
+      document.getElementById('taskResult').innerHTML = '';
+    });
+    document.getElementById('resetBtnTop').addEventListener('click', () => location.reload());
+
+    // --- Profiles editor (same as previous multi-agent UI) ---
+    const DEFAULT_PROFILES = [
+      {"name":"Agent A（保守）","system":"你是保守實用且謹慎的專家，優先考量生存必需品與風險最小化。","temperature":0.3},
+      {"name":"Agent B（創新）","system":"你是創新且想法多的顧問，會考慮非常規但有潛力的策略。","temperature":0.8},
+      {"name":"Agent C（導航）","system":"你是導航/回收專家，重視回到基地與路徑選擇。","temperature":0.4},
+      {"name":"Agent D（醫療）","system":"你是醫療背景，會針對健康與急救優先排序。","temperature":0.2},
+      {"name":"Agent E（節能）","system":"你是資源管理專家，優化能量與資源使用。","temperature":0.35},
+    ];
+    let profiles = JSON.parse(localStorage.getItem('ms_profiles') || 'null') || DEFAULT_PROFILES.slice();
+    function renderProfilesEditor() {
+      const container = document.getElementById('profilesEditor');
+      container.innerHTML = '';
+      profiles.slice(0,5).forEach((p, idx) => {
+        const el = document.createElement('div');
+        el.className = 'profile-row';
+        el.innerHTML = `
+          <div class="profile-row-top">
+            <div class="profile-index">${idx+1}</div>
+            <input data-idx="${idx}" data-field="name" value="${p.name}" class="profile-input name" />
+            <input data-idx="${idx}" data-field="temperature" value="${p.temperature}" class="profile-input temp" />
+          </div>
+          <textarea data-idx="${idx}" data-field="system" class="profile-text">${p.system}</textarea>
+        `;
+        container.appendChild(el);
+      });
+      container.querySelectorAll('input[data-field], textarea[data-field]').forEach(el => {
+        el.addEventListener('input', e => {
+          const idx = +e.target.dataset.idx, field = e.target.dataset.field;
+          let val = e.target.value;
+          if (field === 'temperature') val = parseFloat(val) || 0.5;
+          profiles[idx][field] = val;
+          localStorage.setItem('ms_profiles', JSON.stringify(profiles));
+        });
+      });
+    }
+    renderProfilesEditor();
+    document.getElementById('applyProfilesBtn').addEventListener('click', () => {
+      profiles = profiles.slice(0,5);
+      localStorage.setItem('ms_profiles', JSON.stringify(profiles));
+      alert('Profiles 已套用並存於 localStorage。');
+    });
+    document.getElementById('resetProfilesBtn').addEventListener('click', () => {
+      profiles = DEFAULT_PROFILES.slice();
+      localStorage.setItem('ms_profiles', JSON.stringify(profiles));
+      renderProfilesEditor();
+      alert('Profiles 已還原為預設。');
     });
 
-    // Chat UI logic
+    // --- Chat send (multi-agent) ---
+    function uuidv4(){ return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,function(c){var r=Math.random()*16|0,v=c=='x'?r:(r&0x3|0x8);return v.toString(16);});}
+    let client_id = localStorage.getItem('ms_client_id') || (localStorage.setItem('ms_client_id', uuidv4()), localStorage.getItem('ms_client_id'));
+
     const messagesEl = document.getElementById('messages');
-    function appendMessage(role, text) {
-      const div = document.createElement('div');
-      div.className = 'msg ' + role;
-      div.textContent = text;
-      messagesEl.appendChild(div);
-      messagesEl.scrollTop = messagesEl.scrollHeight;
+    function appendMessage(role, text, label){
+      const div = document.createElement('div'); div.className = 'msg ' + role;
+      if (label) { const h = document.createElement('div'); h.className='msg-label'; h.textContent = label; div.appendChild(h); }
+      const c = document.createElement('div'); c.textContent = text; div.appendChild(c);
+      messagesEl.appendChild(div); messagesEl.scrollTop = messagesEl.scrollHeight;
     }
 
-    async function sendChat(message) {
-      appendMessage('user', message);
+    document.getElementById('sendBtn').addEventListener('click', async () => {
+      const input = document.getElementById('chatInput'); const text = input.value.trim(); if (!text) return; input.value='';
+      appendMessage('user', text, '你');
       appendMessage('thinking', 'AI 回應中…');
-
+      const agents = parseInt(document.getElementById('agentsSelect').value || '3', 10);
+      const use_memory = !!document.getElementById('useMemory').checked;
+      const payloadProfiles = profiles.slice(0, agents).map(p => ({ name: p.name, system: p.system, temperature: Number(p.temperature) || 0.7 }));
       try {
         const resp = await fetch('/chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message })
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ client_id, message: text, agents, profiles: payloadProfiles, use_memory })
         });
         const data = await resp.json();
-        // remove the "thinking" bubble
-        const thinking = document.querySelector('.msg.thinking');
-        if (thinking) thinking.remove();
-
-        if (resp.ok && data.reply) {
-          appendMessage('assistant', data.reply);
+        const thinking = document.querySelector('.msg.thinking'); if (thinking) thinking.remove();
+        if (resp.ok && data.replies) {
+          data.replies.forEach(r => appendMessage('assistant', r.reply, `${r.agent} ${r.source? '('+r.source+')' : ''}`));
         } else {
-          appendMessage('assistant', '回應失敗，請稍後再試。');
+          appendMessage('assistant', '回應失敗，請稍後再試。', '系統');
         }
       } catch (err) {
-        const thinking = document.querySelector('.msg.thinking');
-        if (thinking) thinking.remove();
-        appendMessage('assistant', '通訊錯誤：' + err.message);
-      }
-    }
-
-    document.getElementById('sendBtn').addEventListener('click', () => {
-      const input = document.getElementById('chatInput');
-      const text = input.value.trim();
-      if (!text) return;
-      input.value = '';
-      sendChat(text);
-    });
-
-    // Enter to send
-    document.getElementById('chatInput').addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        document.getElementById('sendBtn').click();
+        const thinking = document.querySelector('.msg.thinking'); if (thinking) thinking.remove();
+        appendMessage('assistant', '通訊錯誤：' + err.message, '系統');
       }
     });
+
+    document.getElementById('chatInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); document.getElementById('sendBtn').click(); } });
   </script>
 </body>
 </html>
